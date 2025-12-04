@@ -10,6 +10,8 @@ const employeeRoutes = require('./routes/employees');
 const userRoutes = require('./routes/users');
 
 const app = express();
+
+app.use(cors());
 const PORT = process.env.PORT || 8080;
 
 // Sanity check untuk JWT_SECRET

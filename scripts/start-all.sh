@@ -1,124 +1,88 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+LOG_DIR="$REPO_ROOT/logs"
+FRONTEND_DIR="$REPO_ROOT/frontend"
+BACKEND_DIR="$REPO_ROOT/backend"
 
-# PT Jasamedika Saranatama - Admin Panel Start Script
-# This script starts both backend and frontend services
+mkdir -p "$LOG_DIR"
 
 echo "=========================================="
 echo "🚀 Starting PT Jasamedika Admin Panel"
 echo "=========================================="
 
-# Check if .env file exists
-if [ ! -f "backend/.env" ]; then
-    echo "⚠️  .env file not found in backend directory"
-    echo "📝 Creating .env file from template..."
-    
-    # Generate random JWT_SECRET
-    JWT_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-64)
-    
-    cat > backend/.env << EOF
-JWT_SECRET=${JWT_SECRET}
-PORT=8080
-NODE_ENV=development
-EOF
-    
-    echo "✅ .env file created with random JWT_SECRET"
-    echo "🔑 JWT_SECRET: ${JWT_SECRET}"
+echo "🧹 Cleaning up existing processes (best-effort)..."
+# stop previous instances started the same way
+pkill -f "frontend/node_modules/.bin/vite" 2>/dev/null || true
+pkill -f "node server.js" 2>/dev/null || true
+sleep 1
+
+echo "📦 Ensure dependencies (only if missing)"
+if [ ! -d "$BACKEND_DIR/node_modules" ]; then
+  (cd "$BACKEND_DIR" && npm install)
+fi
+if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+  (cd "$FRONTEND_DIR" && npm install)
 fi
 
-# Function to check if port is in use
-check_port() {
-    local port=$1
-    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Kill existing processes on ports 8080 and 5173
-echo "🧹 Cleaning up existing processes..."
-if check_port 8080; then
-    echo "🛑 Stopping backend on port 8080..."
-    pkill -f "node.*server.js" 2>/dev/null || true
-    sleep 2
-fi
-
-if check_port 5173; then
-    echo "🛑 Stopping frontend on port 5173..."
-    pkill -f "vite" 2>/dev/null || true
-    sleep 2
-fi
-
-# Install dependencies if needed
-echo "📦 Installing dependencies..."
-if [ ! -d "backend/node_modules" ]; then
-    echo "📥 Installing backend dependencies..."
-    cd backend && npm install && cd ..
-fi
-
-if [ ! -d "frontend/node_modules" ]; then
-    echo "📥 Installing frontend dependencies..."
-    cd frontend && npm install && cd ..
-fi
-
-# Start backend
-echo "🔧 Starting backend server..."
-cd backend
-export $(cat .env | xargs)
-nohup node server.js > ../logs/backend.log 2>&1 &
+echo "🔧 Starting backend..."
+cd "$BACKEND_DIR"
+nohup node server.js > "$LOG_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
-cd ..
-
 echo "📡 Backend started with PID: $BACKEND_PID"
-
-# Wait for backend to start
-sleep 3
-
-# Check if backend is running
-if check_port 8080; then
-    echo "✅ Backend is running on port 8080"
-else
-    echo "❌ Backend failed to start"
-    echo "📋 Check logs/backend.log for details"
-    exit 1
+# wait backend port
+BACKEND_TIMEOUT=30
+echo "⏳ Waiting backend on port 8080 (timeout ${BACKEND_TIMEOUT}s)..."
+for i in $(seq 1 $BACKEND_TIMEOUT); do
+  if nc -z 127.0.0.1 8080 2>/dev/null; then
+    # also check HTTP response briefly
+    if curl -sI http://127.0.0.1:8080/ | head -n1 | grep -E "HTTP/1.[01] 200|HTTP/1.[01] 3" >/dev/null 2>&1; then
+      echo "✅ Backend responding (pid $BACKEND_PID)"
+      break
+    fi
+  fi
+  sleep 1
+done
+if ! nc -z 127.0.0.1 8080 2>/dev/null; then
+  echo "❌ Backend failed to start (port 8080 not responding). See $LOG_DIR/backend.log"
+  exit 1
 fi
 
-# Start frontend
-echo "🎨 Starting frontend server..."
-cd frontend
-nohup npm run dev -- --host > ../logs/frontend.log 2>&1 &
-FRONTEND_PID=$!
-cd ..
-
-echo "🖥️  Frontend started with PID: $FRONTEND_PID"
-
-# Wait for frontend to start
-sleep 5
-
-# Check if frontend is running
-if check_port 5173; then
-    echo "✅ Frontend is running on port 5173"
+echo "🎨 Starting frontend..."
+# skip if already running
+if pgrep -f "frontend/node_modules/.bin/vite" >/dev/null 2>&1 || pgrep -f "vite --host" >/dev/null 2>&1; then
+  echo "Frontend already running (pgrep detected). Skipping start."
 else
-    echo "❌ Frontend failed to start"
-    echo "📋 Check logs/frontend.log for details"
+  cd "$FRONTEND_DIR"
+  nohup npm run dev -- --host > "$LOG_DIR/frontend.log" 2>&1 &
+  FRONTEND_PID=$!
+  echo "🖥️  Frontend started with PID: $FRONTEND_PID"
+
+  FRONTEND_TIMEOUT=30
+  echo "⏳ Waiting frontend on port 5173 (timeout ${FRONTEND_TIMEOUT}s)..."
+  for i in $(seq 1 $FRONTEND_TIMEOUT); do
+    if nc -z 127.0.0.1 5173 2>/dev/null; then
+      # check HTTP header quickly
+      if curl -sI http://127.0.0.1:5173/ | head -n1 | grep -E "HTTP/1.[01] 200|HTTP/1.[01] 3" >/dev/null 2>&1; then
+        echo "✅ Frontend responding (pid $FRONTEND_PID)"
+        break
+      fi
+    fi
+    sleep 1
+  done
+
+  if ! nc -z 127.0.0.1 5173 2>/dev/null; then
+    echo "❌ Frontend failed to start (port 5173 not responding). Check $LOG_DIR/frontend.log"
+    # emit last 30 lines for quick debug
+    echo "---- last lines of frontend.log ----"
+    tail -n 30 "$LOG_DIR/frontend.log" || true
     exit 1
+  fi
 fi
 
-echo ""
 echo "=========================================="
-echo "🎉 PT Jasamedika Admin Panel is running!"
-echo "=========================================="
-echo "🌐 Frontend: http://localhost:5173"
-echo "🔌 Backend API: http://localhost:8080"
-echo "❤️  Health Check: http://localhost:8080/health"
-echo ""
-echo "📋 Useful commands:"
-echo "  View backend logs: tail -f logs/backend.log"
-echo "  View frontend logs: tail -f logs/frontend.log"
-echo "  Stop all services: ./scripts/stop-all.sh"
-echo ""
-echo "🔑 To initialize admin data:"
-echo "  curl -X POST http://localhost:8080/api/auth/init-data \\"
-echo "    -H 'Content-Type: application/json' \\"
-echo "    -d '{\"namaAdmin\":\"Admin User\",\"perusahaan\":\"PT Jasamedika Saranatama\"}'"
+echo "All services started successfully."
+echo "Backend PID: ${BACKEND_PID:-existing}"
+echo "Frontend PID: ${FRONTEND_PID:-existing}"
+echo "Logs: $LOG_DIR"
 echo "=========================================="

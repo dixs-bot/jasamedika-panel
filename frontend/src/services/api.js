@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:8080'
+// Use the current page hostname so frontend works from PC or device
+const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : 'localhost'
+const API_BASE_URL = `http://${host}:8080`
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -13,10 +15,13 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    try {
+      const token = localStorage.getItem('token')
+      if (token) {
+        config.headers = config.headers || {}
+        config.headers.Authorization = `Bearer ${token}`
+      }
+    } catch (e) {}
     return config
   },
   (error) => {
@@ -32,7 +37,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid
-      localStorage.removeItem('token')
+      try { localStorage.removeItem('token') } catch(e){}
       window.location.href = '/login'
     }
     return Promise.reject(error)

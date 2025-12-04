@@ -1,77 +1,34 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import api from '../services/api'
+import React, { createContext, useContext } from 'react';
+const AuthContext = createContext();
 
-const AuthContext = createContext()
-
-export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}
+const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : 'localhost';
+export const BASE_API = `http://${host}:8080`;
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      // Verify token by getting user info
-      api.get('/auth/users')
-        .then(response => {
-          // Find current user from the list
-          const currentUser = response.data.data.users.find(u => u.email === JSON.parse(atob(token.split('.')[1])).email)
-          if (currentUser) {
-            setUser(currentUser)
-          } else {
-            localStorage.removeItem('token')
-          }
-        })
-        .catch(() => {
-          localStorage.removeItem('token')
-        })
-        .finally(() => {
-          setLoading(false)
-        })
-    } else {
-      setLoading(false)
-    }
-  }, [])
-
   const login = async (email, password) => {
     try {
-      const response = await api.post('/auth/login', { email, password })
-      const { token, info } = response.data.hasil
-      
-      localStorage.setItem('token', token)
-      setUser(info)
-      
-      return { success: true }
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || 'Login gagal' 
+      const res = await fetch(`${BASE_API}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const text = await res.text();
+      let data;
+      try { data = text ? JSON.parse(text) : {}; } catch (e) {
+        return { success: false, error: 'Invalid JSON response from server: ' + text };
       }
+      if (!res.ok) return { success: false, error: data.message || data.error || 'Login failed' };
+      const token = data?.hasil?.token || data?.token;
+      if (token) localStorage.setItem('token', token);
+      return { success: true, hasil: data.hasil || data };
+    } catch (err) {
+      return { success: false, error: err.message || 'Network error' };
     }
-  }
+  };
 
-  const logout = () => {
-    localStorage.removeItem('token')
-    setUser(null)
-  }
+  const logout = () => { try { localStorage.removeItem('token'); } catch(e){} };
 
-  const value = {
-    user,
-    login,
-    logout,
-    loading
-  }
+  return <AuthContext.Provider value={{ login, logout }}>{children}</AuthContext.Provider>;
+};
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  )
-}
+export const useAuth = () => useContext(AuthContext);

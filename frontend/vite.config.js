@@ -1,27 +1,27 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
+// Replace IP below with your Android IP if different
+const BACKEND = 'http://192.168.1.5:8080'
+
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0',
+    host: true,
     port: 5173,
     proxy: {
+      // forward /api/* to backend
       '/api': {
-        target: 'http://localhost:8080',
+        target: BACKEND,
         changeOrigin: true,
-        secure: false
+        rewrite: (path) => path.replace(/^\/api/, '/api')
       },
-      '/uploads': {
-        target: 'http://localhost:8080',
+      // forward /auth/* to backend (in case frontend still calls /auth)
+      '/auth': {
+        target: BACKEND,
         changeOrigin: true,
-        secure: false
+        rewrite: (path) => path.replace(/^\/auth/, '/api/auth')
       }
     }
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: true
   }
 })
