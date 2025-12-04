@@ -1,0 +1,26 @@
+[
+  {
+    "idUser": "u_1764837743611_w362t3ct9",
+    "profile": "p_1764837743611_5v0maf2fm",
+    "namaLengkap": "Admin User",
+    "tempatLahir": "",
+    "tanggalLahir": null,
+    "email": "admin@ptjasamedikasaranatama.local",
+    "passwordHash": "$2a$10$VLJa.d2NRUWdAqV8xzhJZuJO4SCGE7TBL7KU1A7YhGP1KRCMR2CKi",
+    "nikUser": "",
+    "kdJabatan": null,
+    "namaJabatan": "Administrator",
+    "kdDepartemen": null,
+    "namaDepartemen": "IT",
+    "kdUnitKerja": null,
+    "namaUnitKerja": "",
+    "kdJenisKelamin": null,
+    "namaJenisKelamin": "",
+    "kdPendidikan": null,
+    "namaPendidikan": "",
+    "photo": null,
+    "role": "admin",
+    "companyId": "c_1764837743508_b54mxrwfp",
+    "createdAt": 1764837743
+  }
+]
