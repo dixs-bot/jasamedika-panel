@@ -1,13 +1,14 @@
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-8 p-4">
-      <div className="relative w-24 h-24 md:w-32 md:h-32">
-        <img
-          src="/logo.svg"
-          alt="Z.ai Logo"
-          className="w-full h-full object-contain"
-        />
+    <main className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold">
+          Jasa Medika Panel
+        </h1>
+        <p className="mt-4 text-gray-500">
+          Deployment berhasil 🚀
+        </p>
       </div>
-    </div>
-  )
+    </main>
+  );
 }
